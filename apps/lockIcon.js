@@ -8,6 +8,7 @@ import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
 export const LockIcon = GObject.registerClass(
 class LockIcon extends PanelMenu.Button {
@@ -18,7 +19,9 @@ class LockIcon extends PanelMenu.Button {
         this.keymap = global.stage.get_context().get_backend().get_default_seat().get_keymap();
 
         // Get extension object for accessing icons
-        const extensionObject = Main.extensionManager.lookup('kiwi@kemma');
+        // By its own URL rather than a hard-coded UUID, so it still resolves
+        // when the extension is installed under another one.
+        const extensionObject = Extension.lookupByURL(import.meta.url);
 
         // Create icons
         this._numLockIcon = new St.Icon({
