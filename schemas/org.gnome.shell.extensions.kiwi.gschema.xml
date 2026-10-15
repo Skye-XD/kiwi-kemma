@@ -176,6 +176,11 @@
         <summary>Dock Styling</summary>
         <description>Tighten Dash-to-Dock icon spacing and remove the icon hover highlight.</description>
       </key>
+      <key name="dock-border" type="b">
+        <default>true</default>
+        <summary>Dock Border</summary>
+        <description>Draw the thin light edge around the styled dock.</description>
+      </key>
       <key name="dock-blur" type="b">
         <default>true</default>
         <summary>Dock Blur</summary>

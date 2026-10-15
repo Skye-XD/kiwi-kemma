@@ -9,6 +9,9 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { dashOf, dockContainers, isDock, prefersDark, syncDarken } from './dockUtils.js';
 
 const STYLE_CLASS = 'kiwi-dock-styled';
+// Drops the inset edge the stylesheet draws on a styled dock (dock-border).
+const BORDERLESS_CLASS = 'kiwi-dock-borderless';
+let borderless = false;
 const LABEL_CLASS = 'kiwi-dock-label';
 const DARK_CLASS = 'dark';
 
@@ -57,6 +60,8 @@ function _unwireItem(item) {
 
 function _applyDock(container) {
     container.add_style_class_name(STYLE_CLASS);
+    if (borderless)
+        container.add_style_class_name(BORDERLESS_CLASS);
 
     const box = dashOf(container)?._box;
     if (!box)
@@ -74,6 +79,16 @@ function _applyDock(container) {
         boxSignals = boxSignals.filter(other => other !== entry);
     });
     boxSignals.push(entry);
+}
+
+export function setBorder(on) {
+    borderless = !on;
+    for (const container of dockContainers()) {
+        if (borderless)
+            container.add_style_class_name(BORDERLESS_CLASS);
+        else
+            container.remove_style_class_name(BORDERLESS_CLASS);
+    }
 }
 
 export function enable() {
@@ -120,6 +135,7 @@ export function disable() {
 
     for (const container of dockContainers()) {
         container.remove_style_class_name(STYLE_CLASS);
+        container.remove_style_class_name(BORDERLESS_CLASS);
         dashOf(container)?._box?.get_children().forEach(_unwireItem);
     }
 }
