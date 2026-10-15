@@ -482,13 +482,13 @@ function restorePanelStyle() {
 }
 
 function _isFullscreenActive() {
-    return global.workspace_manager
-        .get_active_workspace()
-        .list_windows()
-        .some(win =>
-            win.showing_on_its_workspace() &&
-            !win.is_hidden() &&
-            win.is_fullscreen());
+    // The shell's own answer, the one that decides whether Main.panel is shown:
+    // mutter counts the primary as fullscreen only while no maximized window
+    // sits above the fullscreen one. Listing fullscreen windows ourselves said
+    // yes for a video on another monitor, and for a video covered by a
+    // maximized window -- the panel was then visible and styled as if it
+    // weren't.
+    return Main.layoutManager.primaryMonitor?.inFullscreen ?? false;
 }
 
 // The shell owns Main.panel.style too: Overview._gestureEnd() replaces it with

@@ -20,6 +20,7 @@ const HIDE_DELAY_MS = 300; // delay before hiding after leaving/closing
 let fullscreenWindows = new Set();
 let windowSignals = new Map();
 let windowCreatedHandler = null;
+let inFullscreenChangedHandler = null;
 let workspaceChangedHandler = null;
 let overviewShowingHandler = null;
 let overviewHiddenHandler = null;
@@ -303,11 +304,14 @@ function _recomputeFullscreenState() {
 
     fullscreenWindows.clear();
     for (const w of global.workspace_manager.get_active_workspace().list_windows()) {
-        if (w.is_fullscreen())
+        // Only the primary monitor's panel is managed here.
+        if (w.is_fullscreen() && w.is_on_primary_monitor())
             fullscreenWindows.add(w);
     }
 
-    wsHasFullscreen = fullscreenWindows.size > 0;
+    // Same source as the shell's trackFullscreen, so the hover reveal agrees
+    // with whether the panel is actually hidden (see panelTransparency.js).
+    wsHasFullscreen = Main.layoutManager.primaryMonitor?.inFullscreen ?? false;
 
     // Update panel behavior based on fullscreen state and overview visibility
     // Track idle source so it can be cancelled on disable
@@ -373,6 +377,9 @@ export function enable() {
     });
 
     // Connect to events
+    // Restacking changes the answer without any window changing its own
+    // fullscreen state, so notify::fullscreen alone misses it.
+    inFullscreenChangedHandler = global.display.connect('in-fullscreen-changed', _recomputeFullscreenState);
     windowCreatedHandler = global.display.connect('window-created', _onWindowCreated);
     workspaceChangedHandler = global.workspace_manager.connect('active-workspace-changed', _onWorkspaceChanged);
     overviewShowingHandler = Main.overview.connect('showing', _onOverviewShowing);
@@ -433,6 +440,10 @@ export function disable() {
     }
 
     // Disconnect event handlers
+    if (inFullscreenChangedHandler) {
+        global.display.disconnect(inFullscreenChangedHandler);
+        inFullscreenChangedHandler = null;
+    }
     if (windowCreatedHandler) {
         global.display.disconnect(windowCreatedHandler);
         windowCreatedHandler = null;
