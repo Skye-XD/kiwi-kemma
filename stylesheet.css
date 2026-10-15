@@ -522,6 +522,12 @@ Gjs_apps_windowControls_WindowControlsIndicator.panel-button:focus {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
 }
 
+/* dock-border off */
+#dashtodockContainer.kiwi-dock-styled.kiwi-dock-borderless #dash .dash-background,
+#dashtodockContainer.kiwi-dock-styled.kiwi-dock-borderless.kiwi-dock-light #dash .dash-background {
+  box-shadow: none;
+}
+
 /* Name tooltips: the shell theme keeps them near-black in a light session, so
    they follow the session's scheme here instead, and take the palette the
    downloads pills use so the two match. apps/dockStyling.js adds the classes -

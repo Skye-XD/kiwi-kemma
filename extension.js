@@ -45,7 +45,7 @@ import { enable as panelMediaEnable, disable as panelMediaDisable } from './apps
 import { enable as keyboardIndicatorEnable, disable as keyboardIndicatorDisable } from './apps/keyboardIndicator.js';
 import { enable as launchpadAppEnable, disable as launchpadAppDisable } from './apps/launchpadApp.js';
 import { enable as dockBlurEnable, disable as dockBlurDisable } from './apps/dockBlur.js';
-import { enable as dockStylingEnable, disable as dockStylingDisable } from './apps/dockStyling.js';
+import { enable as dockStylingEnable, disable as dockStylingDisable, setBorder as dockStylingSetBorder } from './apps/dockStyling.js';
 import { enable as dockColorsEnable, disable as dockColorsDisable } from './apps/dockColors.js';
 import { enable as minimizedToDockEnable, disable as minimizedToDockDisable } from './apps/minimizedToDock.js';
 import { enable as downloadsStackEnable, disable as downloadsStackDisable } from './apps/downloadsStack.js';
@@ -242,9 +242,10 @@ export default class KiwiExtension extends Extension {
             keyboardIndicatorDisable();
 
         // Dock styling
-        if (hasDock && this._settings.get_boolean('dock-styling'))
+        if (hasDock && this._settings.get_boolean('dock-styling')) {
             dockStylingEnable();
-        else
+            dockStylingSetBorder(this._settings.get_boolean('dock-border'));
+        } else
             dockStylingDisable();
 
         // Dock blur
