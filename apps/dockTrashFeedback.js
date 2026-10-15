@@ -41,6 +41,15 @@ let revealed = new Set();
 let hideId = 0;
 let timers = new Set();
 let flyers = new Set();
+let dndIds = [];
+let dragging = false;
+let dragRevealed = new Set();
+let hoveredArt = null;
+
+// A drag reveals an autohidden dock once it reaches the dock's screen edge,
+// and lets go once it is clearly away from it.
+const REVEAL_EDGE = 3;
+const RELEASE_MARGIN = 48;
 
 function later(ms, fn) {
     const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
@@ -183,6 +192,94 @@ function fly(gicon, from, art, onLanded) {
     });
 }
 
+/* Darken and lift the trash while something is dragged over it, as the macOS
+ * Dock does. The Shell sees a client drag only as positions (Mutter's dnd-*
+ * signals), which is enough for this; a drop still goes to the window under
+ * the pointer, so only DING's desktop icons are trashed by letting go here. */
+function hover(art) {
+    if (art === hoveredArt)
+        return;
+    unhover();
+    if (!art)
+        return;
+    hoveredArt = art;
+    art.set_pivot_point(0.5, 1.0);
+    if (!art.get_effect('kiwi-trash-hover'))
+        art.add_effect_with_name('kiwi-trash-hover', new Clutter.BrightnessContrastEffect());
+    art.get_effect('kiwi-trash-hover').set_brightness(-0.25);
+    art.ease({ scale_x: 1.12, scale_y: 1.12, duration: 120, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+}
+
+function unhover() {
+    const art = hoveredArt;
+    hoveredArt = null;
+    if (!art)
+        return;
+    try {
+        art.remove_effect_by_name('kiwi-trash-hover');
+        art.ease({ scale_x: 1, scale_y: 1, duration: 120, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+    } catch (_e) {
+        // The dock rebuilt its icons meanwhile.
+    }
+}
+
+function syncDragReveal(dock, x, y) {
+    const monitor = Main.layoutManager.monitors[dock.monitorIndex];
+    if (!monitor || typeof dock._onDragStart !== 'function')
+        return;
+    let distance;
+    switch (dock._position) {
+    case St.Side.TOP: distance = y - monitor.y; break;
+    case St.Side.LEFT: distance = x - monitor.x; break;
+    case St.Side.RIGHT: distance = monitor.x + monitor.width - 1 - x; break;
+    default: distance = monitor.y + monitor.height - 1 - y;
+    }
+    const onMonitor = x >= monitor.x && x < monitor.x + monitor.width &&
+        y >= monitor.y && y < monitor.y + monitor.height;
+
+    if (!dragRevealed.has(dock)) {
+        if (onMonitor && distance <= REVEAL_EDGE) {
+            dragRevealed.add(dock);
+            dock._onDragStart();
+        }
+    } else if (!onMonitor || distance > (dock._box?.height ?? 0) + RELEASE_MARGIN) {
+        dragRevealed.delete(dock);
+        dock._onDragEnd();
+    }
+}
+
+function onDragMotion(x, y) {
+    if (!dragging)
+        return;
+    let over = null;
+    for (const dock of dockContainers()) {
+        syncDragReveal(dock, x, y);
+        const art = trashArtIn(dock);
+        if (!art?.mapped)
+            continue;
+        const [ax, ay] = art.get_transformed_position();
+        const [aw, ah] = art.get_transformed_size();
+        if (x >= ax && x < ax + aw && y >= ay && y < ay + ah)
+            over = art;
+    }
+    hover(over);
+}
+
+function onDragEnd() {
+    if (!dragging)
+        return;
+    dragging = false;
+    unhover();
+    for (const dock of dragRevealed) {
+        try {
+            dock._onDragEnd();
+        } catch (_e) {
+            // The dock went away first.
+        }
+    }
+    dragRevealed.clear();
+}
+
 async function onAdded(files) {
     const dock = currentDock();
     const shown = files.slice(0, MAX_FLYERS);
@@ -281,9 +378,20 @@ export function enable(extSettings) {
     });
     // The starting count, so the first change has something to compare with.
     readCount();
+
+    const dnd = global.backend.get_dnd();
+    dndIds = [
+        dnd.connect('dnd-enter', () => (dragging = true)),
+        dnd.connect('dnd-position-change', (_d, x, y) => onDragMotion(x, y)),
+        dnd.connect('dnd-leave', () => onDragEnd()),
+    ];
 }
 
 export function disable() {
+    onDragEnd();
+    const dnd = global.backend.get_dnd();
+    dndIds.forEach(id => dnd.disconnect(id));
+    dndIds = [];
     if (settleId) {
         GLib.source_remove(settleId);
         settleId = 0;
