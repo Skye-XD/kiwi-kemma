@@ -37,7 +37,7 @@ const _grab_resizing_operations = [
 
 export class TransparentMove {
     constructor() {
-        this._window_opacity = {};
+        this._window_opacity = new Map();
     }
 
     init_grab_operations() {
@@ -115,33 +115,35 @@ export class TransparentMove {
         if (!meta_window || !this.is_grab_operation_allowed(meta_grab_op)) {
             return;
         }
-    
+
         const window_surfaces = this.get_window_surfaces(meta_window);
         if (window_surfaces.length === 0)
             return;
 
-        const pid = meta_window.get_pid();
-        if (!this._window_opacity[pid])
-            this._window_opacity[pid] = window_surfaces[0].opacity;
+        // Keyed by window, not pid: windows of one process are dimmed and
+        // restored independently. An entry still present means a fade back is
+        // in flight, so the saved value is the real one, not the mid-fade one.
+        if (!this._window_opacity.has(meta_window))
+            this._window_opacity.set(meta_window, window_surfaces[0].opacity);
 
         this.set_opacity(window_surfaces, WINDOW_OPACITY);
     }
 
+    // Restore every window this dimmed, whatever the end event reports. A grab
+    // on a maximized window (a drag from the top panel unmaximizes it) did not
+    // always end with the window and op it began with, and the window was then
+    // left translucent for good. Only one grab runs at a time, so nothing
+    // dimmed outlives it.
     window_grab_end(meta_display, meta_window, meta_grab_op, gpointer) {
-        if (!meta_window || !this.is_grab_operation_allowed(meta_grab_op)) {
-            return;
+        for (const [win, opacity] of this._window_opacity) {
+            const window_surfaces = this.get_window_surfaces(win);
+            if (window_surfaces.length === 0) {
+                this._window_opacity.delete(win);
+                continue;
+            }
+            this.set_opacity(window_surfaces, opacity,
+                () => this._window_opacity?.delete(win));
         }
-    
-        const window_surfaces = this.get_window_surfaces(meta_window);
-        if (window_surfaces.length === 0)
-            return;
-
-        const pid = meta_window.get_pid();
-        const complete_func = function() {
-            delete this._window_opacity[pid];
-        };
-
-        this.set_opacity(window_surfaces, this._window_opacity[pid], complete_func.bind(this));
     }
 
     enable() {
@@ -156,11 +158,8 @@ export class TransparentMove {
 
         // A window mid-move or mid-fade would stay dimmed; stopping the fade also
         // skips its onComplete, which would touch the state deleted below
-        for (const actor of global.get_window_actors()) {
-            const opacity = this._window_opacity[actor.meta_window.get_pid()];
-            if (opacity === undefined)
-                continue;
-            for (const surface of this.get_window_surfaces(actor.meta_window)) {
+        for (const [win, opacity] of this._window_opacity) {
+            for (const surface of this.get_window_surfaces(win)) {
                 surface.remove_all_transitions();
                 surface.opacity = opacity;
             }
