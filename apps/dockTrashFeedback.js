@@ -11,6 +11,7 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { dockContainers } from './dockUtils.js';
@@ -45,6 +46,12 @@ let dndIds = [];
 let dragging = false;
 let dragRevealed = new Set();
 let hoveredArt = null;
+let drag = null;            // {uris, fromDing, reading, trashWhenRead}
+
+const URI_LIST = 'text/uri-list';
+// DING marks its own icon drags; it trashes those itself when they are let go
+// over the dock trash.
+const DING_ICON_LIST = 'x-special/ding-icon-list';
 
 // A drag reveals an autohidden dock once it reaches the dock's screen edge,
 // and lets go once it is clearly away from it.
@@ -248,6 +255,78 @@ function syncDragReveal(dock, x, y) {
     }
 }
 
+/* What is being dragged. Mutter keeps a client drag's offer as the DND
+ * selection, so the Shell can read the file list itself -- no window of its
+ * own has to receive the drop. Read once per drag, on first reaching the
+ * trash, while the source is still offering it. */
+function readDraggedFiles() {
+    if (!drag || drag.reading || drag.uris || drag.fromDing)
+        return;
+    const selection = global.display.get_selection();
+    const types = selection.get_mimetypes(Meta.SelectionType.SELECTION_DND);
+    if (types.includes(DING_ICON_LIST)) {
+        drag.fromDing = true;
+        return;
+    }
+    if (!types.includes(URI_LIST))
+        return;
+
+    const current = drag;
+    current.reading = true;
+    const stream = Gio.MemoryOutputStream.new_resizable();
+    selection.transfer_async(Meta.SelectionType.SELECTION_DND, URI_LIST, -1,
+        stream, cancellable, (sel, res) => {
+            current.reading = false;
+            try {
+                sel.transfer_finish(res);
+                stream.close(null);
+                const text = new TextDecoder().decode(stream.steal_as_bytes().toArray());
+                current.uris = text.split(/\r?\n/)
+                    .map(l => l.trim())
+                    .filter(l => l.startsWith('file://'));
+            } catch (e) {
+                console.error(`[kiwi] reading the dragged files: ${e.message}`);
+                return;
+            }
+            if (current.trashWhenRead)
+                trashUris(current.uris);
+        });
+}
+
+/* The drop had no target as far as the source knows, so Mutter slides the
+ * drag icon back to where it came from. The file is going into the trash, not
+ * home: hide the icon on release. Mutter destroys it once its own slide
+ * finishes; anything still there afterwards gets its opacity back. */
+function hideDragIcon() {
+    const group = global.compositor.get_feedback_group();
+    const icons = group.get_children();
+    icons.forEach(a => (a.opacity = 0));
+    later(1000, () => icons.forEach(a => {
+        try {
+            if (a.get_parent() === group)
+                a.opacity = 255;
+        } catch (_e) {
+            // Already destroyed, as expected.
+        }
+    }));
+}
+
+// Through Files, so the move shows up in its undo history.
+function trashUris(uris) {
+    if (!uris?.length)
+        return;
+    Gio.DBus.session.call('org.gnome.Nautilus', '/org/gnome/Nautilus/FileOperations2',
+        'org.gnome.Nautilus.FileOperations2', 'TrashURIs',
+        new GLib.Variant('(asa{sv})', [uris, {}]), null,
+        Gio.DBusCallFlags.NONE, -1, null, (conn, res) => {
+            try {
+                conn.call_finish(res);
+            } catch (e) {
+                console.error(`[kiwi] trashing dropped files: ${e.message}`);
+            }
+        });
+}
+
 function onDragMotion(x, y) {
     if (!dragging)
         return;
@@ -263,12 +342,27 @@ function onDragMotion(x, y) {
             over = art;
     }
     hover(over);
+    if (over)
+        readDraggedFiles();
 }
 
 function onDragEnd() {
     if (!dragging)
         return;
     dragging = false;
+
+    // Let go over the trash: trash what was dragged. A drag cancelled with
+    // Esc ends with the button still held, and is left alone.
+    const [, , mods] = global.get_pointer();
+    const released = !(mods & Clutter.ModifierType.BUTTON1_MASK);
+    if (hoveredArt && released && drag && !drag.fromDing) {
+        hideDragIcon();
+        if (drag.uris)
+            trashUris(drag.uris);
+        else
+            drag.trashWhenRead = true;
+    }
+    drag = null;
     unhover();
     for (const dock of dragRevealed) {
         try {
@@ -381,7 +475,10 @@ export function enable(extSettings) {
 
     const dnd = global.backend.get_dnd();
     dndIds = [
-        dnd.connect('dnd-enter', () => (dragging = true)),
+        dnd.connect('dnd-enter', () => {
+            dragging = true;
+            drag = { uris: null, fromDing: false, reading: false, trashWhenRead: false };
+        }),
         dnd.connect('dnd-position-change', (_d, x, y) => onDragMotion(x, y)),
         dnd.connect('dnd-leave', () => onDragEnd()),
     ];
