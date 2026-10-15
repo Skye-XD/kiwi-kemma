@@ -181,6 +181,16 @@
         <summary>Dock Border</summary>
         <description>Draw the thin light edge around the styled dock.</description>
       </key>
+      <key name="dock-trash-animation" type="b">
+        <default>false</default>
+        <summary>Dock Trash Animation</summary>
+        <description>Animate the dock's trash icon when something is moved to the trash and when it is emptied.</description>
+      </key>
+      <key name="dock-trash-sound" type="b">
+        <default>false</default>
+        <summary>Dock Trash Sound</summary>
+        <description>Play the trash sound along with the dock trash animation.</description>
+      </key>
       <key name="dock-blur" type="b">
         <default>true</default>
         <summary>Dock Blur</summary>
