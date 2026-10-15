@@ -49,6 +49,7 @@ import { enable as dockStylingEnable, disable as dockStylingDisable, setBorder a
 import { enable as dockColorsEnable, disable as dockColorsDisable } from './apps/dockColors.js';
 import { enable as minimizedToDockEnable, disable as minimizedToDockDisable } from './apps/minimizedToDock.js';
 import { enable as downloadsStackEnable, disable as downloadsStackDisable } from './apps/downloadsStack.js';
+import { enable as dockTrashFeedbackEnable, disable as dockTrashFeedbackDisable } from './apps/dockTrashFeedback.js';
 import { enable as reduceWindowAnimationsEnable, disable as reduceWindowAnimationsDisable } from './apps/reduceWindowAnimations.js';
 import { enableDragRestore, disableDragRestore } from './apps/windowTiling.js';
 import { dockActive, isDockExtension, resetDockSettings } from './apps/dockUtils.js';
@@ -192,6 +193,11 @@ export default class KiwiExtension extends Extension {
         } else {
             downloadsStackDisable();
         }
+
+        if (hasDock && this._settings.get_boolean('dock-trash-animation'))
+            dockTrashFeedbackEnable(this._settings);
+        else
+            dockTrashFeedbackDisable();
 
         if (this._settings.get_boolean('hide-activities-button')) {
             hideActivitiesButtonEnable();
@@ -357,6 +363,7 @@ export default class KiwiExtension extends Extension {
         // The stack borrows the minimized strip and holds a signal on it, so it
         // has to let go before that strip is destroyed
         downloadsStackDisable();
+        dockTrashFeedbackDisable();
         minimizedToDockDisable();
         reduceWindowAnimationsDisable();
         disableDragRestore();
