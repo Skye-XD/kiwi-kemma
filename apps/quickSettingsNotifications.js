@@ -2,6 +2,7 @@
 // Kiwi Extension - Quick Settings Notifications
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as MessageList from 'resource:///org/gnome/shell/ui/messageList.js';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
@@ -35,9 +36,11 @@ let _panelMoonIcon = null;
 let _kiwiSettings = null;
 let _kiwiSettingsChangedId = null;
 
-// Load Kiwi's own moon icon from the extension directory
+// Load Kiwi's own moon icon from the extension directory -- found by its own
+// URL rather than a fixed UUID, so it still resolves when Kiwi is installed
+// under another one (lookup() then returns undefined and .dir throws).
 function getDndIconGicon() {
-    const extensionObject = Main.extensionManager.lookup('kiwi@kemma');
+    const extensionObject = Extension.lookupByURL(import.meta.url);
     return Gio.FileIcon.new(extensionObject.dir.get_child(DND_ICON_PATH));
 }
 
