@@ -301,11 +301,15 @@ function readDraggedFiles() {
                 sel.transfer_finish(res);
                 stream.close(null);
                 const text = new TextDecoder().decode(stream.steal_as_bytes().toArray());
-                // text/uri-list lines end in CRLF. A last piece with no line
-                // ending means the source stopped mid-list: it may be a cut-off
-                // path (a parent folder, a name prefix), so never trash it.
+                // GTK and Qt end every uri-list line in CRLF, so there a last
+                // piece with no line ending means the source stopped mid-list:
+                // it may be a cut-off path (a parent folder, a name prefix)
+                // and is never trashed. Chromium (Chrome, Electron) joins its
+                // lines with a bare LF and ends without one; its last piece is
+                // a whole URI.
                 const lines = text.split(/\r?\n/);
-                lines.pop();
+                if (lines[lines.length - 1] === '' || text.includes('\r\n'))
+                    lines.pop();
                 current.uris = lines
                     .map(l => l.trim())
                     .filter(l => l.startsWith('file://'));
