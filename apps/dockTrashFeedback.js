@@ -352,6 +352,16 @@ function trashUris(uris) {
         });
 }
 
+/* A drop on the dock reaches no client only because the dock is the topmost
+ * reactive thing at that point. Inside the trash icon's rectangle is not
+ * enough: mid-slide, or partly past its monitor's edge, the dock need not be
+ * what is under the pointer, and the window that is would take the drop as
+ * well -- the files then both trashed and dropped into that app. */
+function dockIsUnder(dock, x, y) {
+    const actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, x, y);
+    return !!actor && dock.contains(actor);
+}
+
 function onDragMotion(x, y) {
     if (!dragging)
         return;
@@ -363,7 +373,7 @@ function onDragMotion(x, y) {
             continue;
         const [ax, ay] = art.get_transformed_position();
         const [aw, ah] = art.get_transformed_size();
-        if (x >= ax && x < ax + aw && y >= ay && y < ay + ah)
+        if (x >= ax && x < ax + aw && y >= ay && y < ay + ah && dockIsUnder(dock, x, y))
             over = art;
     }
     hover(over);
@@ -379,10 +389,13 @@ function onDragEnd() {
     // Let go over the trash: trash what was dragged. A drag cancelled with
     // Esc ends with the button still held, and is left alone, and so is one
     // that carries no files (text, a tab): its icon must still slide home.
-    const [, , mods] = global.get_pointer();
+    // Checked again where it was let go: the last motion may be a frame old.
+    const [px, py, mods] = global.get_pointer();
     const released = !(mods & Clutter.ModifierType.BUTTON1_MASK);
     const hasFiles = drag && (drag.uris?.length || drag.reading);
-    if (hoveredArt && released && hasFiles && !drag.fromDing) {
+    const dock = hoveredArt && dockContainers().find(dc => dc.contains(hoveredArt));
+    if (hoveredArt && dock && dockIsUnder(dock, px, py) &&
+        released && hasFiles && !drag.fromDing) {
         hideDragIcon();
         if (drag.uris)
             trashUris(drag.uris);
