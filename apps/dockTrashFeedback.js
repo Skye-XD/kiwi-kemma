@@ -38,13 +38,13 @@ let settleId = 0;
 let cancellable = null;
 let count = null;
 let added = [];
-let revealed = new Set();
 let hideId = 0;
 let timers = new Set();
 let flyers = new Set();
 let dndIds = [];
 let dragging = false;
-let dragRevealed = new Set();
+// dock -> Set of what is holding it up: 'trash' (reveal) and/or 'drag'.
+let dockHolders = new Map();
 let hoveredArt = null;
 let drag = null;            // {uris, fromDing, reading, trashWhenRead}
 
@@ -92,27 +92,49 @@ function trashArtIn(dock) {
     return found;
 }
 
+/* The post-trash reveal and a drag at the dock edge both hold the dock up
+ * through Dash-to-Dock's _onDragStart/_onDragEnd, which save one state per
+ * dock: a second start overwrites it and the first end drops the dock even
+ * while the other still wants it. So start on the first holder, end on the
+ * last. */
+function holdDock(dock, who) {
+    const holders = dockHolders.get(dock);
+    if (holders) {
+        holders.add(who);
+        return;
+    }
+    dock._onDragStart();
+    dockHolders.set(dock, new Set([who]));
+}
+
+function releaseDock(dock, who) {
+    const holders = dockHolders.get(dock);
+    if (!holders?.delete(who) || holders.size)
+        return;
+    dockHolders.delete(dock);
+    try {
+        dock._onDragEnd();
+    } catch (_e) {
+        // The dock went away first.
+    }
+}
+
+function releaseAll(who) {
+    for (const dock of [...dockHolders.keys()])
+        releaseDock(dock, who);
+}
+
 /* Bring the dock up the way Dash-to-Dock does for its own drags, and keep it
  * there until the animations are over. */
 function reveal(dock, holdMs) {
     if (!dock || typeof dock._onDragStart !== 'function')
         return;
-    if (!revealed.has(dock)) {
-        revealed.add(dock);
-        dock._onDragStart();
-    }
+    holdDock(dock, 'trash');
     if (hideId)
         GLib.source_remove(hideId);
     hideId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, holdMs + LINGER_MS, () => {
         hideId = 0;
-        for (const d of revealed) {
-            try {
-                d._onDragEnd();
-            } catch (e) {
-                console.error(e);
-            }
-        }
-        revealed.clear();
+        releaseAll('trash');
         return GLib.SOURCE_REMOVE;
     });
 }
@@ -245,14 +267,11 @@ function syncDragReveal(dock, x, y) {
     const onMonitor = x >= monitor.x && x < monitor.x + monitor.width &&
         y >= monitor.y && y < monitor.y + monitor.height;
 
-    if (!dragRevealed.has(dock)) {
-        if (onMonitor && distance <= REVEAL_EDGE) {
-            dragRevealed.add(dock);
-            dock._onDragStart();
-        }
+    if (!dockHolders.get(dock)?.has('drag')) {
+        if (onMonitor && distance <= REVEAL_EDGE)
+            holdDock(dock, 'drag');
     } else if (!onMonitor || distance > (dock._box?.height ?? 0) + RELEASE_MARGIN) {
-        dragRevealed.delete(dock);
-        dock._onDragEnd();
+        releaseDock(dock, 'drag');
     }
 }
 
@@ -282,7 +301,12 @@ function readDraggedFiles() {
                 sel.transfer_finish(res);
                 stream.close(null);
                 const text = new TextDecoder().decode(stream.steal_as_bytes().toArray());
-                current.uris = text.split(/\r?\n/)
+                // text/uri-list lines end in CRLF. A last piece with no line
+                // ending means the source stopped mid-list: it may be a cut-off
+                // path (a parent folder, a name prefix), so never trash it.
+                const lines = text.split(/\r?\n/);
+                lines.pop();
+                current.uris = lines
                     .map(l => l.trim())
                     .filter(l => l.startsWith('file://'));
             } catch (e) {
@@ -367,14 +391,7 @@ function onDragEnd() {
     }
     drag = null;
     unhover();
-    for (const dock of dragRevealed) {
-        try {
-            dock._onDragEnd();
-        } catch (_e) {
-            // The dock went away first.
-        }
-    }
-    dragRevealed.clear();
+    releaseAll('drag');
 }
 
 async function onAdded(files) {
@@ -504,14 +521,8 @@ export function disable() {
         GLib.source_remove(hideId);
         hideId = 0;
     }
-    for (const d of revealed) {
-        try {
-            d._onDragEnd();
-        } catch (_e) {
-            // The dock went away first.
-        }
-    }
-    revealed.clear();
+    releaseAll('trash');
+    releaseAll('drag');
     cancellable?.cancel();
     cancellable = null;
     if (monitor) {
