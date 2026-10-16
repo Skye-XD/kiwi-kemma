@@ -201,8 +201,9 @@ function fly(gicon, from, art, onLanded) {
 
 /* Darken and lift the trash while something is dragged over it, as the macOS
  * Dock does. The Shell sees a client drag only as positions (Mutter's dnd-*
- * signals), which is enough for this; a drop still goes to the window under
- * the pointer, so only DING's desktop icons are trashed by letting go here. */
+ * signals), which is enough for this. The dock is reactive chrome, so a drop
+ * on it reaches no client at all (the source sees it cancelled, hence
+ * hideDragIcon()); the files are read from SELECTION_DND and trashed here. */
 function hover(art) {
     if (art === hoveredArt)
         return;
@@ -352,10 +353,12 @@ function onDragEnd() {
     dragging = false;
 
     // Let go over the trash: trash what was dragged. A drag cancelled with
-    // Esc ends with the button still held, and is left alone.
+    // Esc ends with the button still held, and is left alone, and so is one
+    // that carries no files (text, a tab): its icon must still slide home.
     const [, , mods] = global.get_pointer();
     const released = !(mods & Clutter.ModifierType.BUTTON1_MASK);
-    if (hoveredArt && released && drag && !drag.fromDing) {
+    const hasFiles = drag && (drag.uris?.length || drag.reading);
+    if (hoveredArt && released && hasFiles && !drag.fromDing) {
         hideDragIcon();
         if (drag.uris)
             trashUris(drag.uris);
