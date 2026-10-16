@@ -25,6 +25,15 @@ function _windowForActor(actor) {
 }
 
 function _onStageEvent(stage, event) {
+    // Only ever while the overview is up. The login overview is marked visible
+    // without 'showing', and when it is then suppressed (or hidden) outside the
+    // usual path 'hiding' never comes either: tracking started in enable() then
+    // ran for the whole session, raising whatever the pointer crossed.
+    if (!Main.overview.visible) {
+        _stopHoverTracking();
+        return Clutter.EVENT_PROPAGATE;
+    }
+
     const type = event.type();
     if (type !== Clutter.EventType.MOTION && type !== Clutter.EventType.ENTER)
         return Clutter.EVENT_PROPAGATE;
