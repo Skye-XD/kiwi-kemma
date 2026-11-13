@@ -50,6 +50,7 @@ import { enable as dockColorsEnable, disable as dockColorsDisable } from './apps
 import { enable as minimizedToDockEnable, disable as minimizedToDockDisable } from './apps/minimizedToDock.js';
 import { enable as downloadsStackEnable, disable as downloadsStackDisable } from './apps/downloadsStack.js';
 import { enable as dockTrashFeedbackEnable, disable as dockTrashFeedbackDisable } from './apps/dockTrashFeedback.js';
+import { enable as tabDetachEnable, disable as tabDetachDisable } from './apps/tabDetach.js';
 import { enable as reduceWindowAnimationsEnable, disable as reduceWindowAnimationsDisable } from './apps/reduceWindowAnimations.js';
 import { enableDragRestore, disableDragRestore } from './apps/windowTiling.js';
 import { dockActive, isDockExtension, resetDockSettings } from './apps/dockUtils.js';
@@ -198,6 +199,11 @@ export default class KiwiExtension extends Extension {
             dockTrashFeedbackEnable(this._settings);
         else
             dockTrashFeedbackDisable();
+
+        if (this._settings.get_boolean('tab-detach-over-windows'))
+            tabDetachEnable();
+        else
+            tabDetachDisable();
 
         if (this._settings.get_boolean('hide-activities-button')) {
             hideActivitiesButtonEnable();
@@ -364,6 +370,7 @@ export default class KiwiExtension extends Extension {
         // has to let go before that strip is destroyed
         downloadsStackDisable();
         dockTrashFeedbackDisable();
+        tabDetachDisable();
         minimizedToDockDisable();
         reduceWindowAnimationsDisable();
         disableDragRestore();
