@@ -186,6 +186,11 @@
         <summary>Dock Trash Animation</summary>
         <description>Animate the dock's trash icon when something is moved to the trash and when it is emptied.</description>
       </key>
+      <key name="tab-detach-over-windows" type="b">
+        <default>true</default>
+        <summary>Tab Detach Over Windows</summary>
+        <description>A tab dragged out of a libadwaita app (Terminal, Files, Text Editor) and dropped over another app's window opens in a new window, as on macOS, instead of snapping back.</description>
+      </key>
       <key name="dock-trash-sound" type="b">
         <default>false</default>
         <summary>Dock Trash Sound</summary>
