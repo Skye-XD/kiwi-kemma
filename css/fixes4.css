@@ -40,6 +40,22 @@
   min-height: 32px;
 }
 
+/* Nautilus 50 removed the sidebar icon/label classes. Match the row's content
+   structure instead, which also works on 48/49 and excludes action buttons. */
+.nautilus-window placessidebar .navigation-sidebar > row > revealer > box > image {
+  color: var(--accent-color, var(--accent-bg-color, #3584e4));
+}
+
+/* Medium-weight places, with a bold label for the selected location. */
+.nautilus-window placessidebar .navigation-sidebar > row > revealer > box > label {
+  font-weight: 400;
+}
+
+.nautilus-window placessidebar .navigation-sidebar > row:selected > revealer > box > label,
+.nautilus-list-view columnview > listview > row:selected label {
+  font-weight: 600;
+}
+
 /* Filepicker */
 listview.view > row.activatable > cell {
   padding: 0px 9px;
@@ -52,12 +68,15 @@ listview.view > row.activatable > cell {
   min-height: 16px;
 }
 
-/* Remove checkered alpha channel drawing around thumbnails and icons. Creates more cleaner look */
+/* Remove the thumbnail checkerboard and frame, keeping the icon drop shadow.
+   Nautilus 51 uses .nautilus-image.file-thumbnail; keep .thumbnail for older versions. */
+.nautilus-image.file-thumbnail,
 .thumbnail,
 .icon .thumbnail,
 .grid-view .thumbnail {
   background: none;
   box-shadow: none;
+  filter: drop-shadow(0px 1px 1px rgba(0,0,0,0.3));
 }
 
 /* Adding accent color to Floating bar */
